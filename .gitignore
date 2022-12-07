@@ -1,0 +1,6 @@
+*.ini
+serial.log
+iso
+system
+build
+pkg
