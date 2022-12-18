@@ -1,6 +1,6 @@
-# Aiden
+![banner](.github/AIDEN.png)
 
-operating system write from assembly for 64 bit processor from ``AMD64` family.
+operating system write from assembly for 64 bit processor from ``AMD64`` family.
 
 ## requirement for running aiden
 
