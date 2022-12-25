@@ -8,8 +8,41 @@ kernel_service_list:
 	dq	kernel_service_task_pid
 	dq	kernel_service_driver_mouse
 	dq	kernel_service_storage_read
+    dq  kernel_service_exec
 kernel_service_list_end:
 section .text
+
+kernel_service_exec:
+    push rcx
+    push rsi
+    push rdi
+    push r8
+
+    xchg bx, bx
+
+    ; kernel environment variable / routine base address
+    mov r8, qword [kernel_environment_base_address]
+
+    ; prepare exec decriptor
+    sub rsp, KERNEL_EXEC_STRUCTURE.SIZE
+    ; pointer of file descriptor
+    mov rbp, rsp
+    
+    ; execute file from path
+    mov rcx, rsi
+    mov rsi, rdi
+    ; call kernel_exec
+
+    ; remove exec descriptor
+    add rsp, KERNEL_EXEC_STRUCTURE.SIZE
+
+    pop r8
+    pop rdi
+    pop rsi
+    pop rcx
+
+    ret
+    
 
 kernel_service_driver_mouse:
     push rax
