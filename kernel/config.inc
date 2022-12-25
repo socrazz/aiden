@@ -1,10 +1,10 @@
 %define KERNEL_name "aiden"
 %define KERNEL_version "0.0.1"
-%define KERNEL_revision "1461"
+%define KERNEL_revision "1468"
 %define KERNEL_architecture "x86_64"
 %define KERNEL_language "Assembly"
 
-%define KERNEL_BASE_address 0xFFFFFFFF80000000
+%define KERNEL_BASE_location 0xFFFFFFFF80000000
 
 struc KERNEL_STRUCTURE
     ; variable of smp management function
