@@ -26,11 +26,14 @@ kernel_exec:
     movzx eax, byte [r8 + KERNEL_STRUCTURE.storage_root_id]
     call kernel_storage_file
 
+    ; get prepare error code
     mov qword [rsp + KERNEL_STORAGE_STRUCTURE_FILE.SIZE + KERNEL_EXEC_DESCRIPTOR_offset + KERNEL_EXEC_STRUCTURE.task_or_status], LIB_SYS_ERROR_file_not_found
 
+    ; checking file found
     cmp qword [rbp + KERNEL_STORAGE_STRUCTURE_FILE.id], EMPTY
     je .end
 
+    ; prepare error code
     mov qword [rsp + KERNEL_STORAGE_STRUCTURE_FILE.SIZE + KERNEL_EXEC_DESCRIPTOR_offset + KERNEL_EXEC_STRUCTURE.task_or_status], LIB_SYS_ERROR_file_not_found
 
     ; preparing space for file content
@@ -38,6 +41,7 @@ kernel_exec:
     add rcx, ~STATIC_PAGE_mask
     shr rcx, STATIC_PAGE_SIZE_shift
     call kernel_memory_alloc
+    ; no memory
     jc .end
 
     ; load file content into prepared space
@@ -48,14 +52,22 @@ kernel_exec:
     mov r12, rcx
     mov r13, rdi
     
+    ; prepare error code
     mov qword [rsp + KERNEL_STORAGE_STRUCTURE_FILE.SIZE + KERNEL_EXEC_DESCRIPTOR_offset + KERNEL_EXEC_STRUCTURE.task_or_status], LIB_SYS_ERROR_file_not_found
 
     ; checking if file have proper ELF header
     call lib_elf_check
     jc .error_level_file
 
+    ; check prepare error code
     cmp byte [rdi + LIB_ELF_STRUCTURE.type], LIB_ELF_TYPE_executable
-    jne .error_level_file
+
+    ; load dependend lib
+    call kernel_library_import
+    jc .error_level_file
+
+    ; connect libraries to file executable
+    call kernel_library_link
 
     ; register new task on queue
     mov rcx, qword [rsp + KERNEL_STORAGE_FILE.SIZE]
@@ -63,6 +75,8 @@ kernel_exec:
     call kernel_task_add
     jc .error_level_file
 
+    ; paging array of new process
+    ; prepare error code
     mov	qword [rsp + KERNEL_STORAGE_STRUCTURE_FILE.SIZE + KERNEL_EXEC_DESCRIPTOR_offset + KERNEL_EXEC_STRUCTURE.task_or_status], LIB_SYS_ERROR_exec_not_executable
 
     ; make space for the process paging table
