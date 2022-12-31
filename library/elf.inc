@@ -23,13 +23,15 @@ struc LIB_ELF_STRUCTURE
     .memory_layout resb 1
     .header_version resb 1
     .abi resb 1
-    .padding resq 1
+    .abi_version resb 1
+    .padding resb 7
     .type resw 1
     .instruction_set resw 1
     .elf_version resd 1
     .program_entry_position resq 1
     .header_table_position resq 1
     .section_table_position resq 1
+    .flags resd 1
     .header_size resw 1
     .header_table_size resw 1
     .header_entry_count resw 1
@@ -47,6 +49,26 @@ struc LIB_ELF_STRUCTURE_HEADER
     .segment_size resq 1
     .memory_size resq 1
     .alignment resq 1
+    .SIZE:
+endstruc
+
+struct LIB_ELF_STRUCTURE_SECTION
+    .name resd 1
+    .type resd 1
+    .flags resq 1
+    .virtual_address resq 1
+    .file_offset resq 1
+    .size_byte resq 1
+    .link resd 
+    .info red 1
+    .alignment resq 1
+    .entry_count resq 1
+    .SIZE:
+endstruc
+
+struc LIB_ELF_STRUCTURE_SECTION_DYNAMIC
+    .type resq 1
+    .offset resq 1
     .SIZE:
 endstruc
 

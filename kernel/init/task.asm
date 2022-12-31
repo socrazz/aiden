@@ -35,7 +35,7 @@ kernel_init_task:
 
 .one_to_rule_all:
     ; calculating cpu listing size in pages
-    shl rcx, STATIC_PTR_SIZE_shift
+    shl rcx, STATIC_MULTIPLE_BY_8_shift
     add rcx, ~STATIC_PAGE_mask
     add rcx, STATIC_PAGE_mask
     shr rcx, STATIC_PAGE_SIZE_shift

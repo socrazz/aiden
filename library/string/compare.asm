@@ -1,3 +1,5 @@
+%include "default.inc"
+
 lib_string_compare:
   push rax
   push rcx

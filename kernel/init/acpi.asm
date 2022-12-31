@@ -25,9 +25,10 @@ kernel_init_acpi:
     ; pointer 2 RSDT header 
     mov edi, dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.rsdt_address]
 
+    ; entries inside table
     mov ecx, dword [edi + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
     sub ecx, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
-    shr ecx, STATIC_DWORD_SIZE_shift
+    shr ecx, STATIC_DIVIDE_BY_4_shift
 
     ; move pointer to first entry of rsdt table
     add edi, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
@@ -44,16 +45,20 @@ kernel_init_acpi:
 
 .extended:
     push rsi
-
+    
+    ; show information about ACPI
     mov rsi, kernel_acpi_extended
     call driver_serial_string
 
     pop rsi
+    
+    ; set pointer to XSDT header
     mov rdi, qword [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.xsdt_address]
 
+    ; entries
     mov ecx, dword [edi + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
     sub ecx, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
-    shr ecx, STATIC_DWORD_SIZE_shift
+    shr ecx, STATIC_DIVIDE_BY_8_shift
     
     ; move pointer to first entry rsdt table
     add edi, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
@@ -98,6 +103,7 @@ kernel_init_acpi:
     ret
 
 .parse:
+    ; header of multiple apic descriptor table
     dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT.madt + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.signature], "APIC"
     je .madt
 

@@ -50,7 +50,30 @@ section .text
     ; kernel env
     %include "kernel/exec.asm"
     %include "kernel/idt.asm"
+    %include "kernel/io_apic.asm"
+    %include "kernel/lapic.asm"
+    %include "kernel/library.asm"
+    %include "kernel/memory.asm"
+    %include "kernel/page.asm"
+    %include "kernel/service.asm"
+    %include "kernel/storage.asm"
+    %include "kernel/syscall.asm"
+    %include "kernel/task.asm"
 
+    ; kernel environment initialize routine
+    %include "kernel/init/acpi.asm"
+	%include "kernel/init/ap.asm"
+	%include "kernel/init/exec.asm"
+	%include "kernel/init/framebuffer.asm"
+	%include "kernel/init/free.asm"
+	%include "kernel/init/gdt.asm"
+	%include "kernel/init/idt.asm"
+	%include "kernel/init/library.asm"
+	%include "kernel/init/memory.asm"
+	%include "kernel/init/page.asm"
+	%include "kernel/init/smp.asm"
+	%include "kernel/init/storage.asm"
+	%include "kernel/init/task.asm"
 
 init:
     ; configure failover output
@@ -69,5 +92,38 @@ init:
     ; parse ACPI tables
     call kernel_init_acpi
 
+    ; recreate kernel paging structure
     call kernel_init_page
+
+    ; switch to new kernel paging array
+    mov rax, ~KERNEL_PAGE_mirror
+    and rax, qword [r8 + KERNEL_STRUCTURE.page_base_addres]
+    mov cr3, rax
+
+    ; set new stack pointer
+    mov rsp, KERNEL_TASK_pointer
+
+    ; create global descriptor table
+    call kernel_init_gdt
+
+    ; create interrupt descriptor table
+    call kernel_init_idt
+
+    ; create task queue
+    call kernel_init_task
+
+    ; initialize PS2 keyboward mouse driver
+    call driver_ps2
+
+    ; register all available data carriers
+    call kernel_init_storage
+
+    ; execute library subsytem
+    call kernel_init_library
+    
+    ; execute init process
+    call kernel_init_exeic
+
+    ; check initialize test other cpu
+    jmp kernel_init_smp
     

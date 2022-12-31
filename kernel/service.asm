@@ -17,9 +17,7 @@ kernel_service_exec:
     push rsi
     push rdi
     push r8
-
-    xchg bx, bx
-
+    
     ; kernel environment variable / routine base address
     mov r8, qword [kernel_environment_base_address]
 

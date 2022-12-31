@@ -61,6 +61,10 @@ kernel_exec:
 
     ; check prepare error code
     cmp byte [rdi + LIB_ELF_STRUCTURE.type], LIB_ELF_TYPE_executable
+    jne .error_level_file
+
+    ; prepare error code
+    mov qword [rsp + KERNEL_STORAGE_STRUCTURE_FILE.SIZE + KERNEL_EXEC_DESCRIPTOR_offset + KERNEL_EXEC_STRUCTURE.task_or_status], LIB_SYS_ERROR_undefined
 
     ; load dependend lib
     call kernel_library_import
@@ -86,7 +90,6 @@ kernel_exec:
     ; update task entry paging array
     mov qword [r10 + KERNEL_TASK_STRUCTURE.cr3], rdi
     
-
     ; describe the spaced under context stack of process
     mov rax, KERNEL_TASK_STACK_address
     mov bx, KERNEL_PAGE_FLAG_present | KERNEL_PAGE_FLAG_write | KERNEL_PAGE_FLAG_process
@@ -117,6 +120,14 @@ kernel_exec:
     ; stack descriptor
     mov qword [rdx + KERNEL_EXEC_STRUCTURE_RETURN.ss], KERNEL_GDT_STRUCTURE.ds_ring3 | 0x03
 
+    ; default stack pointer
+    mov rax, KERNEL_EXEC_STACK_pointer
+    mov qword [rdx + KERNEL_EXEC_STRUCTURE_RETURN.rsp], rax
+
+    ; stack descriptor
+    mov qword [rdx + KERNEL_EXEC_STRUCTURE_RETURN.ss], KERNEL_GDT_STRUCTURE.ds_ring3 | 0x03
+
+    ; stack
     ; describe the space under context stack of process
     mov rax, KERNEL_EXEC_STACK_address
     or bx, KERNEL_PAGE_FLAG_user

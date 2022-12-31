@@ -629,6 +629,7 @@ kernel_library_load:
     ret
 
 .error_level_aquire:
+    ; first page of acquired space
     shr rax, STATIC_PAGE_SIZE_shift
 
 .error_level_aquire_release:
@@ -639,6 +640,7 @@ kernel_library_load:
     jnz .error_level_aquire_release
 
 .error_level_file:
+    ; release space of loaded file
     mov rcx, r12
     mov rdi, r13
     call kernel_memory_release
