@@ -128,12 +128,10 @@ kernel_library_import:
     add r13, qword [rsp]
 
 .library:
-    cmp qword [r13 + LIB_ELF_STRUCTURE_SECTION_DYNAMIC.type], EMPTY
+    cmp qword [r13 + LIB_ELF_STRUCTURE_SECTION_DYNAMIC.type], LIB_ELF_SECTION_TYPE_needed
     je .end
 
-    cmp qword [r13 + LIB_ELF_STRUCTURE_SECTION_DYNAMIC.type], LIB_ELF_SECTION_DYNAMIC_TYPE_needed
-    jne .omit
-
+    ; preserve original registers
     push rcx
     push rsi
 
@@ -150,13 +148,6 @@ kernel_library_import:
     pop rcx
 
     jc .end
-
-.omit:
-    ; next entry from list
-    add r13, LIB_ELF_STRUCTURE_SECTION_DYNAMIC.SIZE
-    
-    ; continue
-    jmp .library
 
 .end:
     pop r13
@@ -199,7 +190,7 @@ kernel_library_function:
 
 .library_parse:
     ; number of entries in symbol tamble
-    mov dx, word [r14 + KERNEL_LIBRARY_STRUCTURE.symbol_limit]
+   mov dx, word [r14 + KERNEL_LIBRARY_STRUCTURE.dynsym_limit]
 
     ; retrieve pointer to symbol table
     mov r13, qword [r14 + KERNEL_LIBRARY_STRUCTURE.symbol]
@@ -207,7 +198,7 @@ kernel_library_function:
 .symbol:
     ; set pointer to function name
     mov edi, dword [r13 + LIB_ELF_STRUCTURE_DYNAMIC_SYMBOL.name_offset]
-    add rdi, qword [r14 + KERNEL_LIBRARY_STRUCTURE.string]
+    add rdi, qword [r14 + KERNEL_LIBRARY_STRUCTURE.strtab]
 
     cmp byte [rdi + rcx], STATIC_ASCII_TERMINATOR
     je .symbol_name
@@ -313,31 +304,28 @@ kernel_libray_limit:
     add r11, 0x10
 
 .function:
-    cmp qword [r8 + LIB_ELF_STRUCTURE_RELOCATION.symbol_value], EMPTY
-    jne .function_next
-
     ; get function index
     mov eax, dword [r8 + LIB_ELF_STRUCTURE_DYNAMIC_RELOCATION.index]
-
-    ; calculate offset to pointer
-    mov rcx, 0x18
+    
+    ; calculate offset to function name
+    mov rcx, LIB_ELF_STRUCTURE_SYMBOL.SIZE
     mul rcx
 
-    cmp qword [r9 + rax + LIB_ELF_STRUCTURE_DYNAMIC_SYMBOL.address], EMPTY
+    cmp qword [r9 + rax + LIB_ELF_STRUCTURE_SYMBOL.address], EMPTY
     jne .function_next
-    
-    ; set pointer to function name
-    mov esi, qword [r9 + rax]
-    add rsi, r10
 
-    ; caulcate function name length
+    ; set pointer to function name
+    mov esi, dword [r9 + rax]
+    add rsi, r10
+    
+    ; calculate function name length
     call lib_string_length
 
     ; retrieve function address
     call kernel_library_function
-
-    ; insert function address to GOT at RCX offset
-    mov ecx, dword [r8 + LIB_ELF_STRCTURE_DYNAMIC_RELOCATION.index]
+    
+    ; insert function address to GDT at RCX offset
+    mov ecx, dword [r8 + LIB_ELF_STRUCTURE_DYNAMIC_RELOCATION.index]
     shl rcx, STATIC_MULTIPLE_BY_8_shift
     mov qword [r11 + rcx], rax
 
@@ -550,13 +538,13 @@ kernel_library_load:
     jne .no_string_table
 
     ; first string table is for functions
-    cmp qword [r14 + KERNEL_LIBRARY_FUNCTION_STRUCTURE.string], EMPTY
+    cmp qword [r14 + KERNEL_LIBRARY_FUNCTION_STRUCTURE.strtab], EMPTY
     jnz .no_string_table
 
     ; preserve pointer to string table
     mov rbx, qword [rsi + LIB_ELF_STRUCTURE_SECTION.virtual_address]
     add rbx, rdi
-    mov qword [r14 + KERNEL_LIBRARY_STRUCTURE.string], rbx
+    mov qword [r14 + KERNEL_LIBRARY_STRUCTURE.dynsym], rbx
 
 .no_string_table:
     cmp qword [rsi + LIB_ELF_STRUCTURE_SECTION.type], LIB_ELF_SECTION_TYPE_dynsym
@@ -564,11 +552,11 @@ kernel_library_load:
 
     mov rbx, qword [rsi + LIB_ELF_STRUCTURE_SECTION.virtual_addres]
     add rbx, rdi
-    mov qword [r14 + KERNEL_LIBRARY_STRUCTURE.symbol], rbx
+    mov qword [r14 + KERNEL_LIBRARY_STRUCTURE.dynsym], rbx
 
     ; entries limit
     push qword [rsi + LIB_ELF_STRUCTURE_SECTION.size_byte]
-    pop qword [r14 + KERNEL_LIBRARY_STRUCTURE.symbol_limit]
+    pop qword [r14 + KERNEL_LIBRARY_STRUCTURE.dynsym_limit]
 
 .no_symbol_table:
     ; move pointer to next section entry
