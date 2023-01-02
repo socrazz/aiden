@@ -13,6 +13,7 @@
 %define KERNEL_TASK_FLAG_stream_out 0000000010000000b
 %define KERNEL_TASK_FLAG_sleep 0000000100000000b
 %define KERNEL_TASK_FLAG_init 0000000100000000b
+%define kernel_task_FLAG_secured_bit 4
 
 %define KERNEL_TASK_irq 0x20
 %define KERNEL_TASK_limit 32
