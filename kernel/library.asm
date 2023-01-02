@@ -128,8 +128,12 @@ kernel_library_import:
     add r13, qword [rsp]
 
 .library:
-    cmp qword [r13 + LIB_ELF_STRUCTURE_SECTION_DYNAMIC.type], LIB_ELF_SECTION_TYPE_needed
+    ; check end of entries
+    cmp qword [r13 + LIB_ELF_STRUCTURE_SECTION_DYNAMIC.type], EMPTY
     je .end
+
+    cmp qword [r13 + LIB_ELF_STRUCTURE_SECTION_DYNAMIC.type], LIB_ELF_SECTION_TYPE_needed
+    je .omit
 
     ; preserve original registers
     push rcx
@@ -195,27 +199,27 @@ kernel_library_function:
     ; retrieve pointer to symbol table
     mov r13, qword [r14 + KERNEL_LIBRARY_STRUCTURE.symbol]
 
-.symbol:
+.dynsym:
     ; set pointer to function name
     mov edi, dword [r13 + LIB_ELF_STRUCTURE_DYNAMIC_SYMBOL.name_offset]
     add rdi, qword [r14 + KERNEL_LIBRARY_STRUCTURE.strtab]
 
     cmp byte [rdi + rcx], STATIC_ASCII_TERMINATOR
-    je .symbol_name
+    je .dynsym_name
 
-.symbol_next:
+.dynsym_next:
     ; move pointer to next entry
     add r13, LIB_ELF_STRUCTURE_DYNAMIC_SYMBOL.SIZE
 
     sub dx, LIB_ELF_STRUCTURE_DYNAMIC_SYMBOL.SIZE
-    jnz .symbol
+    jnz .dynsym
 
     ; check the next library
     jmp .library_next
 
-.symbol_name:
+.dynsym_name:
     call lib_string_compare
-    jc .symbol_next
+    jc .dynsym_next
 
     ; return function address
     mov rax, qword [r13 + LIB_ELF_STRUCTURE_DYNAMIC_SYMBOL.address]
@@ -304,6 +308,10 @@ kernel_libray_limit:
     add r11, 0x10
 
 .function:
+    ; or symbolic value exist
+    cmp qword [r8 = LIB_ELF_STRUCTURE_DYNAMIC_RELOCATION.symbol_value], EMPTY
+    jne .function_next
+
     ; get function index
     mov eax, dword [r8 + LIB_ELF_STRUCTURE_DYNAMIC_RELOCATION.index]
     
