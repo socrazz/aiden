@@ -1,8 +1,8 @@
 %define KERNEL_INIT_ACPI_MADT_ENTRY_TYPE_io_apic 0x01
 
-struc KERNEL_INIT_STRUCTURE_RSDP_OR_XSDP_HEADER
+struc KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER
         .signature resq 1
-        .checkum resb 1
+        .checksum resb 1
         .oem_id resb 6
         .revision resb 1
         .rsdt_address resd 1
@@ -19,7 +19,8 @@ struc KERNEL_INIT_ACPI_STRUCTURE_DEFAULT
         .checksum resb 1
         .oem_id resb 6
         .oem_table_id resq 1
-        .creator_id resd 1
+        .oem_revision resd 1
+        .create_id resd 1
         .creator_revision resd 1
         .SIZE:
 endstruc
@@ -28,7 +29,7 @@ struc KERNEL_INIT_ACPI_STRUCTURE_MADT
         .madt resb KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
         .lapic_address resd 1
         .flags resd 1
-        .SIZE
+        .SIZE:
 endstruc
 
 struc KERNEL_INIT_ACPI_STRUCTURE_MADT_ENTRY
