@@ -24,6 +24,7 @@ kernel_task:
     push r14
     push r15
 
+    ; keep floating point registers
     mov rbp, KERNEL_TASK_STACK_pointer
     FXSAVE64 [rbp]
 
@@ -40,6 +41,8 @@ kernel_task:
     mov r9, qword [r8 + KERNEL_STRUCTURE.task_ap_address]
     mov r10, qword [r9 + rbx * STATIC_PTR_SIZE_byte]
 
+    ; bug AP deosn't have information about currently
+    ; executed task
     test r10, r10
     jnz .ok
 

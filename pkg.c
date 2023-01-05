@@ -20,7 +20,7 @@ struct LIB_PKG_STRUCTURE {
 
 int main() {
     // prepare empty file header
-    struct LIB_PKG_STRUCTURE pkg[LIB_PKG_BASE] = { 0 };
+    struct LIB_PKG_STRUCTURE pkg[ LIB_PKG_base ] = { 0 };
 
     // include 
     uint64_t files_included = 0;
@@ -36,7 +36,7 @@ int main() {
             continue;
 
         if (strlen(entry -> d_name) > LIB_PKG_name_limit) {
-            printf("Name \"%s\ too long", entry -> d_name);
+            printf("Name \"%s\" too long.", entry -> d_name);
             return -1;
         }
         
@@ -47,7 +47,7 @@ int main() {
         // combine path to file
         char system[7] = "system/";
         char path[sizeof(system) + pkg[files_included].length + 1];
-        snprintf(path, sizeof(path), "%s%s", sytem, pkg[files_included].name);
+        snprintf(path, sizeof(path), "%s%s", system, pkg[files_included].name);
 
         // insert: size of file in bytes
         struct stat finfo;
@@ -100,7 +100,7 @@ int main() {
         FILE *file = fopen(path, "r");
         uint64_t left = pkg[i].size;
         while(left--) fputc(fgetc(file), fpkg);
-        fcloe(file);
+        fclose(file);
 
         for (uint16_t j = 0; j < LIB_PKG_align - (pkg[i].size % LIB_PKG_align); j++)
             fputc('\x00', fpkg);

@@ -22,7 +22,7 @@ struc	LIMINE_FILE
 	.size			resq	1
 	.path			resq	1
 	.cmd			resq	1
-	.unused_by_cyjon:
+	.unused_by_aiden:
 endstruc
 
 struc	LIMINE_FRAMEBUFFER
@@ -31,7 +31,7 @@ struc	LIMINE_FRAMEBUFFER
 	.height			resq	1
 	.pitch			resq	1
 	.bpp			resw	1
-	.unused_by_cyjon:
+	.unused_by_aiden:
 endstruc
 
 struc	LIMINE_FRAMEBUFFER_RESPONSE

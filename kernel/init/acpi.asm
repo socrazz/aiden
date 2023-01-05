@@ -1,153 +1,188 @@
 kernel_init_acpi:
-    push rax
-    push rbx
-    push rcx
-    push rsi
-    push rdi
-    
-    cmp qword [kernel_limine_rsdp_request + LIMINE_RSDP_REQUEST.response], EMPTY
-    je .error
+	; preserve original registers
+	push	rax
+	push	rbx
+	push	rcx
+	push	rsi
+	push	rdi
 
-    mov rsi, qword [kernel_limine_rsdp_request + LIMINE_RSDP_REQUEST.response]
-    mov rsi, qword [rsi + LIMINE_RSDP_RESPONSE.address]
-    
-    cmp byte [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.revision], EMPTY
-    jne .extended
+	cmp	qword [kernel_limine_rsdp_request + LIMINE_RSDP_REQUEST.response],	EMPTY
+	je	.error	; no
 
-    push rsi
-    
-    ; information acpi version
-    mov rsi, kernel_acpi_standard
-    call driver_serial_string
+	; pointer to RSDP header
+	mov	rsi,	qword [kernel_limine_rsdp_request + LIMINE_RSDP_REQUEST.response]
+	mov	rsi,	qword [rsi + LIMINE_RSDP_RESPONSE.address]
 
-    pop rsi
+	; check revision number of RSDP header
+	cmp	byte [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.revision],	EMPTY
+	jne	.extended	; no
 
-    ; pointer 2 RSDT header 
-    mov edi, dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.rsdt_address]
+	; preserve original register
+	push	rsi
 
-    ; entries inside table
-    mov ecx, dword [edi + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
-    sub ecx, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
-    shr ecx, STATIC_DIVIDE_BY_4_shift
+	; show information about ACPI version
+	mov	rsi,	kernel_acpi_standard
+	call	driver_serial_string
 
-    ; move pointer to first entry of rsdt table
-    add edi, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
+	; restore original register
+	pop	rsi
+
+	; set pointer to RSDT header
+	mov	edi,	dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.rsdt_address]
+
+	; entries inside table
+	mov	ecx,	dword [edi + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
+	sub	ecx,	KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
+	shr	ecx,	STATIC_DIVIDE_BY_4_shift
+
+	; move pointer to first entry of RSDT table
+	add	edi,	KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
 
 .rsdt_entry:
-    mov esi, dword [edi]
-    call .parse
+	; parse entry
+	mov	esi,	dword [edi]
+	call	.parse
 
-    ; next entry from rsdt table
-    add edi, STATIC_DWORD_SIZE_byte
+	; next entry from RSDT table
+	add	edi,	STATIC_DWORD_SIZE_byte
 
-    dec ecx
-    jnz .rsdt_entry
+	; end of table?
+	dec	ecx
+	jnz	.rsdt_entry	; no
+
+	; everything parsed
+	jmp	.acpi_end
 
 .extended:
-    push rsi
-    
-    ; show information about ACPI
-    mov rsi, kernel_acpi_extended
-    call driver_serial_string
+	; preserve original register
+	push	rsi
 
-    pop rsi
-    
-    ; set pointer to XSDT header
-    mov rdi, qword [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.xsdt_address]
+	; show information about ACPI version
+	mov	rsi,	kernel_acpi_extended
+	call	driver_serial_string
 
-    ; entries
-    mov ecx, dword [edi + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
-    sub ecx, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
-    shr ecx, STATIC_DIVIDE_BY_8_shift
-    
-    ; move pointer to first entry rsdt table
-    add edi, KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
+	; restore original register
+	pop	rsi
+
+	; set pointer to XSDT header
+	mov	rdi,	qword [rsi + KERNEL_INIT_ACPI_STRUCTURE_RSDP_OR_XSDP_HEADER.xsdt_address]
+
+	; entries inside table
+	mov	ecx,	dword [edi + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
+	sub	ecx,	KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
+	shr	ecx,	STATIC_DIVIDE_BY_8_shift
+
+	; move pointer to first entry of RSDT table
+	add	rdi,	KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.SIZE
 
 .xsdt_entry:
-    mov rsi, qword [rdi]
-    call .parse
+	; parse entry
+	mov	rsi,	qword [rdi]
+	call	.parse
 
-    add rdi, STATIC_DWORD_SIZE_byte
+	; next entry from XSDT table
+	add	rdi,	STATIC_QWORD_SIZE_byte
 
-    dec rcx
-    jnz .xsdt_entry
+	; end of table?
+	dec	rcx
+	jnz	.xsdt_entry	; no
 
 .acpi_end:
-    cmp qword [r8 + KERNEL_STRUCTURE.lapic_base_address], EMPTY
-    je .error
+	; LAPIC controller is available?
+	cmp	qword [r8 + KERNEL_STRUCTURE.lapic_base_address],	EMPTY
+	je	.error	; no
 
-    mov rsi, kernel_acpi_lapic
-    call driver_serial_string
-    mov rax, qword [r8 + KERNEL_STRUCTURE.lapic_base_address]
-    mov ebx, STATIC_NUMBER_SYSTEM_hexadecimal
-    call driver_serial_value
+	; show information about LAPIC
+	mov	rsi,	kernel_acpi_lapic
+	call	driver_serial_string
+	mov	rax,	qword [r8 + KERNEL_STRUCTURE.lapic_base_address]
+	mov	ebx,	STATIC_NUMBER_SYSTEM_hexadecimal
+	call	driver_serial_value
 
-    ; if i/o apic controller is  available
-    cmp qword [r8 + KERNEL_STRUCTURE.io_apic_base_address], EMPTY
-    je .error
+	; I/O APIC controller is available?
+	cmp	qword [r8 + KERNEL_STRUCTURE.io_apic_base_address],	EMPTY
+	je	.error	; no
 
-    ; show info i/o
-    mov rsi, kernel_acpi_io_apic
-    call driver_serial_string
-    mov rax, qword [r8 + KERNEL_STRUCTURE.io_apic_base_address]
-    mov ebx, STATIC_NUMBER_SYSTEM_hexadecimal
-    call driver_serial_value
+	; show information about I/O APIC
+	mov	rsi,	kernel_acpi_io_apic
+	call	driver_serial_string
+	mov	rax,	qword [r8 + KERNEL_STRUCTURE.io_apic_base_address]
+	mov	ebx,	STATIC_NUMBER_SYSTEM_hexadecimal
+	call	driver_serial_value
 
-    ; set to original register
-    pop rdi
-    pop rsi
-    pop rcx
-    pop rbx
-    pop rax
+	; restore original registers
+	pop	rdi
+	pop	rsi
+	pop	rcx
+	pop	rbx
+	pop	rax
 
-    ret
+	; return from routine
+	ret
 
 .parse:
-    ; header of multiple apic descriptor table
-    dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT.madt + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.signature], "APIC"
-    je .madt
+	; header of MADT (Multiple APIC Description Table)?
+	cmp	dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT.madt + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.signature],	"APIC"
+	je	.madt	; yes
+
+	; return from subroutine
+	ret
 
 .madt:
-    push rax
-    push rcx
-    push rsi
-    
-    mov eax, dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT.lapic_address]
-    mov dword [r8 + KERNEL_STRUCTURE.lapic_base_address], eax
+	; preserve original registers
+	push	rax
+	push	rcx
+	push	rsi
 
-    mov ecx, dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT.madt + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
-    sub ecx, KERNEL_INIT_ACPI_STRUCTURE_MADT.SIZE
+	; store LAPIC base address
+	mov	eax,	dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT.lapic_address]
+	mov	dword [r8 + KERNEL_STRUCTURE.lapic_base_address],	eax
 
-    add rsi, KERNEL_INIT_ACPI_STRUCTURE_MADT.SIZE
+	; length of MADT table in entries
+	mov	ecx,	dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT.madt + KERNEL_INIT_ACPI_STRUCTURE_DEFAULT.length]
+	sub	ecx,	KERNEL_INIT_ACPI_STRUCTURE_MADT.SIZE	; adjust for header size
+
+	; move pointer to first MADT entry
+	add	rsi,	KERNEL_INIT_ACPI_STRUCTURE_MADT.SIZE
 
 .madt_entry:
-    cmp byte [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT_ENTRY.type], KERNEL_INIT_ACPI_MADT_ENTRY_TYPE_io_apic
-    je .madt_io_apic
+	; we found I/O APIC?
+	cmp	byte [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT_ENTRY.type],	KERNEL_INIT_ACPI_MADT_ENTRY_TYPE_io_apic
+	je	.madt_io_apic	; yes
 
 .madt_next:
-    movzx eax, byte [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT_ENTRY.length]
-    add rsi, rax
+	; move pointer to next entry
+	movzx	eax,	byte [rsi + KERNEL_INIT_ACPI_STRUCTURE_MADT_ENTRY.length]
+	add	rsi,	rax
 
-    sub rcx, rax
-    jnz .madt_entry
+	; end of table?
+	sub	rcx,	rax
+	jnz	.madt_entry	; no
 
-    pop rsi
-    pop rcx
-    pop rax
+	; restore original registers
+	pop	rsi
+	pop	rcx
+	pop	rax
 
-    ret
+	; return from subroutine
+	ret
 
 .madt_io_apic:
-    cmp dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_IO_APIC.gsib], EMPTY
-    jne .madt_next
+	; first interrupt number supported by this controller is ZERO?
+	cmp	dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_IO_APIC.gsib],	EMPTY
+	jne	.madt_next	; no
 
-    mov eax, dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_IO_APIC.base_address]
-    mov dword [r8 + KERNEL_STRUCTURE.io_apic_base_address], eax
+	; store I/O APIC base address
+	mov	eax,	dword [rsi + KERNEL_INIT_ACPI_STRUCTURE_IO_APIC.base_address]
+	mov	dword [r8 + KERNEL_STRUCTURE.io_apic_base_address],	eax
 
-    jmp .madt_next
+	; continue
+	jmp	.madt_next
 
 .error:
-    mov rsi, kernel_log_rsdp
-    call driver_serial_string
+	; RSDP is not available or something worse...
+	mov	rsi,	kernel_log_rsdp
+	call	driver_serial_string
 
-    jmp $
+	; hold the door
+	jmp	$

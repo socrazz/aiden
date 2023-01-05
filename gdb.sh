@@ -6,7 +6,7 @@ qemu-system-x86_64		\
 	-cpu max		\
 	-smp 2			\
 	-m 128			\
-	-cdrom build/cyjon.iso	\
+	-cdrom build/aiden.iso	\
 	-rtc base=localtime 	\
 	-serial file:serial.log &
 
