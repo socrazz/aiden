@@ -199,357 +199,393 @@ driver_ps2_keyboard_matrix_high				dw	EMPTY
 							dw	DRIVER_PS2_KEYBOARD_PRESS_F11
 							dw	DRIVER_PS2_KEYBOARD_PRESS_F12
 
+; information for linker
 section .text
 
 driver_ps2:
-    push rax
-    push rbx
-    push rcx
-    push r8
+	; preserve original registers
+	push	rax
+	push	rbx
+	push	rcx
+	push	r8
 
-    ; drain PS2 controller buffer
-    call driver_ps2_drain
+	; drain PS2 controller buffer
+	call	driver_ps2_drain
+	; retrieve PS2 controller configuration
+	mov	al,	DRIVER_PS2_COMMAND_CONFIGURATION_GET
+	call	driver_ps2_send_command_receive_answer
 
-    ; retrieve PS2 controller configuration
-    mov al, DRIVER_PS2_COMMAND_CONFIGURATION_GET
-    call driver_ps2_send_commnd_receive_answer
+	; enable interrupts on second device of PS2 controller (mouse)
+	or	al,	DRIVER_PS2_CONFIGURATION_PORT_SECOND_INTERRUPT
+	; and clock
+	and	al,	~DRIVER_PS2_CONFIGURATION_PORT_SECOND_CLOCK
 
-    ; enable interrupts on seconddevice of PS2 controller
-    or al, DRIVER_PS2_CONFIGURTION_PORT_SECOND_INTERRUPT
-    and al, ~DRIVER_PS2_CONFIGURATION_PORT_SECOND_CLOCK
+	; preserve answer
+	push	rax
 
-    ; preserve answer
-    push rax
+	; set new PS2 controller configuration
+	mov	al,	DRIVER_PS2_COMMAND_CONFIGURATION_SET
+	call	driver_ps2_send_command
+	pop	rax	; restore answer
+	call	driver_ps2_send_data
+	; send RESET command to second device on PS2 controller (mouse)
+	mov	al,	DRIVER_PS2_COMMAND_PORT_SECOND
+	call	driver_ps2_send_command
+	mov	al,	DRIVER_PS2_DEVICE_reset
+	call	driver_ps2_send_data
 
-    ; set new ps2 controller configuration
-    mov al, DRIVER_PS2_COMMAND_CONFIGURATION_GET
-    call driver_ps2_send_command
-    pop rax
-    call driver_ps2_send_data
+	; receive first answer
+	call	driver_ps2_receive_data
 
-    ; receive first answer
-    call driver_ps2_receive_data
+	; command accepted?
+	cmp	al,	DRIVER_PS2_ANSWER_ACKNOWLEDGED
+	jne	.no_mouse	; no
 
-    ; command accepted
-    cmp al, DRIVER_PS2_ANSWER_ACKNOWLEDGED
-    jne .no_mouse
+	; receive second answer
+	call	driver_ps2_receive_data
 
-    ; receive second answer
-    call driver_ps2_receive_data
+	; device is working properly?
+	cmp	al,	DRIVER_PS2_ANSWER_SELF_TEST_SUCCESS
+	jne	.no_mouse	;no
 
-    cmp al, DRIVER_PS2_ANSWER_SELF_TEST_SUCCESS
-    jne .no_mouse
+	; receive third answer
+	call	driver_ps2_receive_data
 
-    call driver_ps2_receive_data
-
-    ; preserve mouse device type
-    mov byte [driver_ps2_mouse_type], al
-    
-    ; init device by its own DEFAULT configuration 
-    mov al, DRIVER_PS2_COMMAND_PORT_SECOND
-    call driver_ps2_send_command
-    mov al, DRIVER_PS2_DEVICE_SET_default
-    call driver_ps2_send_data
-
-    call driver_ps2_receive_data
-
-    cmp al, DRIVER_PS2_ANSWER_ACKNOWLEDGED
-    jne .no_mouse
-
-    ; init device by its own default configuration
-	mov al, DRIVER_PS2_COMMAND_PORT_SECOND
-	call driver_ps2_send_command
-	mov al, DRIVER_PS2_DEVICE_PACKETS_enable
-	call driver_ps2_send_data
+	; preserve mouse device type
+	mov	byte [driver_ps2_mouse_type],	al
+	; init device by its own DEFAULT configuration (mouse)
+	mov	al,	DRIVER_PS2_COMMAND_PORT_SECOND
+	call	driver_ps2_send_command
+	mov	al,	DRIVER_PS2_DEVICE_SET_default
+	call	driver_ps2_send_data
 
 	; receive answer
-	call driver_ps2_receive_data
-	
-	cmp al, DRIVER_PS2_ANSWER_ACKNOWLEDGED
-	jne .no_mouse
+	call	driver_ps2_receive_data
 
-	; connect interrutp handler of second device of PS2 controller
-	mov rax, driver_ps2_mouse
-	mov bx, KERNEL_IDT_TYPE_irq
-	mov ecx, KERNEL_IDT_IRQ_offset + DRIVER_PS2_MOUSE_IRQ_number
-	call kernel_idt_update
+	cmp	al,	DRIVER_PS2_ANSWER_ACKNOWLEDGED
+	jne	.no_mouse
+	; init device by its own DEFAULT configuration (mouse)
+	mov	al,	DRIVER_PS2_COMMAND_PORT_SECOND
+	call	driver_ps2_send_command
+	mov	al,	DRIVER_PS2_DEVICE_PACKETS_enable
+	call	driver_ps2_send_data
 
-	; redirect interrupt vector inside I/O APIC controller to
-	; correct idt entry
-	mov eax, KERNEL_IDT_IRQ_offset + DRIVER_PS2_MOUSE_IRQ_number
-	mov ebx, DRIVER_PS2_MOUSE_IO_APIC_register
-	call kernel_io_apic_connect
+	; receive answer
+	call	driver_ps2_receive_data
+
+	; command accepted?
+	cmp	al,	DRIVER_PS2_ANSWER_ACKNOWLEDGED
+	jne	.no_mouse	; no
+
+	; connect interrupt handler of second device of PS2 controller (mouse)
+	mov	rax,	driver_ps2_mouse
+	mov	bx,	KERNEL_IDT_TYPE_irq
+	mov	ecx,	KERNEL_IDT_IRQ_offset + DRIVER_PS2_MOUSE_IRQ_number
+	call	kernel_idt_update
+
+	; redirect interrupt vector inside I/O APIC controller to correct IDT entry
+	mov	eax,	KERNEL_IDT_IRQ_offset + DRIVER_PS2_MOUSE_IRQ_number
+	mov	ebx,	DRIVER_PS2_MOUSE_IO_APIC_register
+	call	kernel_io_apic_connect
 
 .no_mouse:
-	; connect interrupt handler of first device of PS2 controller
-	mov rax, driver_ps2_keyboard
-	mov bx, KERNEL_IDT_TYPE_irq
-	mov ecx, KERNEL_IDT_IRQ_offset + DRIVER_PS2_KEYBOARD_IRQ_number
-	call kernel_idt_update
+	; connect interrupt handler of first device of PS2 controller (keyboard)
+	mov	rax,	driver_ps2_keyboard
+	mov	bx,	KERNEL_IDT_TYPE_irq
+	mov	ecx,	KERNEL_IDT_IRQ_offset + DRIVER_PS2_KEYBOARD_IRQ_number
+	call	kernel_idt_update
 
-	; redirect interrupt vector inseide I/O APIC controller to correct
-	; IDT entry
-	mov eax, KERNEL_IDT_IRQ_offset + DRIVER_PS2_KEYBOARD_IRQ_number
-	mov ebx, DRIVER_PS2_KEYBOARD_IO_APIC_register
-	call kernel_io_apic_connect
+	; redirect interrupt vector inside I/O APIC controller to correct IDT entry
+	mov	eax,	KERNEL_IDT_IRQ_offset + DRIVER_PS2_KEYBOARD_IRQ_number
+	mov	ebx,	DRIVER_PS2_KEYBOARD_IO_APIC_register
+	call	kernel_io_apic_connect
 
-	; if there is no mouse, set its default position of window
-	; manager
+	; even if there is no mouse, set its default position for Window Manager
 
-	; x axis
-	mov ax, word [r8 + KERNEL_STRUCTURE.framebuffer_width_pixel]
-	shr ax, STATIC_DIVIDE_BY_2_shift
-	mov word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x], ax
+	; X axis
+	mov	ax,	word [r8 + KERNEL_STRUCTURE.framebuffer_width_pixel]
+	shr	ax,	STATIC_DIVIDE_BY_2_shift
+	mov	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x],	ax
 
-	; y axis
-	mov ax, word [r8 + KERNEL_STRUCTURE.framebuffer_height_pixel]
-	shr ax, STATIC_DIVIDE_BY_2_shift
-	mov word [r8 + KERNEL_STRUCTURE.driver_p2_mouse_y], ax
+	; Y axis
+	mov	ax,	word [r8 + KERNEL_STRUCTURE.framebuffer_height_pixel]
+	shr	ax,	STATIC_DIVIDE_BY_2_shift
+	mov	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y],	ax
 
-	pop r8
-	pop rcx
-	pop rbx
-	pop rax
+	; restore original registers
+	pop	r8
+	pop	rcx
+	pop	rbx
+	pop	rax
 
+	; return from routine
 	ret
 
-align 0x08, db EMPTY
+; align routine
+align	0x08,	db	EMPTY
 driver_ps2_mouse:
-	push rax
-	push rcx
-	push r8
+	; preserve original registers
+	push	rax
+	push	rcx
+	push	r8
 
-	; kernel environment variable / routine base address
-	mov r8, qword [kernel_environment_base_address]
+	; kernel environment variables/rountines base address
+	mov	r8,	qword [kernel_environment_base_address]
 
-	; receivev data from PS2 controller buffer
+	; receive data from PS2 controller output buffer
+	xor	ax,	ax	; behave as 16 bit value
+	in	al,	DRIVER_PS2_PORT_DATA
 
-	; behave as 16 bit value
-	xor ax, ax
-	in al, DRIVER_PS2_PORT_DATA
-	
-	; check status byte
-	cmp byte [driver_ps2_mouse_packet_id], EMPTY
-	jne .x
+	; status byte?
+	cmp	byte [driver_ps2_mouse_packet_id],	EMPTY
+	jne	.x	; X axis
 
-	test al, DRIVER_PS2_DEVICE_MOUSE_PACKET_ALWAYS_ONE
-	jz .reset
+	; ALWAYS ON bit is set?
+	test	al,	DRIVER_PS2_DEVICE_MOUSE_PACKET_ALWAYS_ONE
+	jz	.reset	; malfunction, ignore packet
 
-	; test overflow x axis
-	test al, DRIVER_PS2_DEVICE_MOUSE_PACKET_OVERFLOW_x
-	jnz .reset
+	; overflow on X axis?
+	test	al,	DRIVER_PS2_DEVICE_MOUSE_PACKET_OVERFLOW_x
+	jnz	.reset	; ignore packet
 
-	; test overflow y axis 
-	test al, DRIVER_PS2_DEVICE_MOUSE_PACKET_OVERFLOW_y
-	jnz .reset
+	; overflow on Y axis?
+	test	al,	DRIVER_PS2_DEVICE_MOUSE_PACKET_OVERFLOW_y
+	jnz	.reset	; ignore packet
 
 	; next packet
-	inc byte [driver_ps2_mouse_packet_id]
+	inc	byte [driver_ps2_mouse_packet_id]
 
 	; save mouse status
-	mov byte [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_status], al
+	mov	byte [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_status],	al
 
 	; interrupt end
-	jmp .end
+	jmp	.end
 
 .x:
-	cmp byte [driver_ps2_mouse_packet_id], 1
-	jne .Y
-	
-	inc byte [driver_ps2_mouse_packet_id]
+	; X axis byte?
+	cmp	byte [driver_ps2_mouse_packet_id],	1
+	jne	.y	; Y axis
 
-	; value with sign
-	mov cl, byte [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_status]
-	test cl, DRIVER_PS2_DEVICE_MOUSE_PACKET_X_SIGNED
-	jz .x_unsigned
+	; next packet
+	inc	byte [driver_ps2_mouse_packet_id]
 
-	; convert to absolute 
-	xor ah, ah
-	not al
-	
+	; value with sign?
+	mov	cl,	byte [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_status]
+	test	cl,	DRIVER_PS2_DEVICE_MOUSE_PACKET_X_SIGNED
+	jz	.x_unsigned	; no
+
+	; convert to absolute value
+	xor	ah,	ah
+	not	al
+
 	; set new pointer position
-	sub word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x], ax
-	jns .end
+	sub	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x],	ax
+	jns	.end
 
 	; overflow, correct a position
-	mov word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x], EMPTY
-	
-	jmp .end
+	mov	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x],	EMPTY
+
+	; interrupt end
+	jmp	.end
 
 .x_unsigned:
-	mov cx, word [r8 + KERNEL_STRUCTURE.framebuffer_width_pixel]
-	dec cx
-	
-	; set ne pointer position
-	add word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x], ax
-	js .x_overflow
+	; retrieve framebuffer limit of X axis
+	mov	cx,	word [r8 + KERNEL_STRUCTURE.framebuffer_width_pixel]
+	dec	cx
+
+	; set new pointer position
+	add	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x],	ax
+	js	.x_overflow	; strange...
 
 	; outside of framebuffer properties
-	cmp word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x], cx
-	jnb .end
+	cmp	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x],	cx
+	jbe	.end	; inside scope
 
 .x_overflow:
 	; overflow, correct a position
-	mov word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x], cx
-	
-	jmp .end
+	mov	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_x],	cx
+
+	; interrupt end
+	jmp	.end
 
 .y:
-	; value with sign
-	mov cl, byte [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_status]
-	test cl, DRIVER_PS2_DEVICE_MOUSE_PACKET_Y_SIGNED
-	jnz .y_signed
+	; value with sign?
+	mov	cl,	byte [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_status]
+	test	cl,	DRIVER_PS2_DEVICE_MOUSE_PACKET_Y_SIGNED
+	jnz	.y_signed	; yes
 
-	; retrieve framebuffer limit
-	mov cx, word [r8 + KERNEL_STRUCTURE.framebuffer_height_pixel]
-	dec cx
+	; retrieve framebuffer limit of X axis
+	mov	cx,	word [r8 + KERNEL_STRUCTURE.framebuffer_height_pixel]
+	dec	cx
 
 	; set new pointer position
-	sub word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y], ax
-	jns .reset
-	
+	sub	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y],	ax
+	jns	.reset
+
 	; overflow, correct a position
-	mov word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y], EMPTY
-	
+	mov	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y],	EMPTY
+
 	; interrupt end
-	jmp .reset
+	jmp	.reset
 
 .y_signed:
-	mov cx, word [r8 + KERNEL_STRUCTURE.framebuffer_height_pixel]
-	dec cx
+	; retrieve framebuffer limit of X axis
+	mov	cx,	word [r8 + KERNEL_STRUCTURE.framebuffer_height_pixel]
+	dec	cx
 
-	; convert to absolute
-	xor ah, ah
-	not al
-	
+	; convert to absolute value
+	xor	ah,	ah
+	not	al
+
 	; set new pointer position
-	add word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y], ax
-	js .y_overflow
+	add	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y],	ax
+	js	.y_overflow	; strange...
 
 	; outside of framebuffer properties
-	cmp word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y], cx
-	jbe .reset
+	cmp	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y],	cx
+	jbe	.reset	; inside scope
 
 .y_overflow:
 	; overflow, correct a position
-	mov word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y], cx
+	mov	word [r8 + KERNEL_STRUCTURE.driver_ps2_mouse_y],	cx
 
 .reset:
 	; reset status byte
-	mov byte [driver_ps2_mouse_packet_id], EMPTY
+	mov	byte [driver_ps2_mouse_packet_id],	EMPTY
 
 .end:
 	; accept this interrupt
-	call kernel_lapic_accept
+	call	kernel_lapic_accept
 
-	; restore original register
-	pop r8
-	pop rcx
-	pop rax
+	; restore original registers
+	pop	r8
+	pop	rcx
+	pop	rax
 
+	; return from interrupt
 	iretq
 
 driver_ps2_drain:
-	; preserve original register
-	push rax
-
-.loop:
-	in al, DRIVER_PS2_PORT_COMMAND_OR_STATUS
-	test al, DRIVER_PS2_STATUS_output
-	jz .end
-
-	; release data from controller data port
-	in al, DRIVER_PS2_PORT_DATA
-
-	jmp .loop
-
-.end:
-	pop rax
-	ret
-
-align 0x08, db EMPTY
-driver_ps2_keyboard:
-	push rax
-	push rcx
-	push r8
-
-	; kernel environment variable / routines base address
-	mov r8, qword [kernel_environment_base_address]
-
-	; receive key scancode
-	xor ax, ax
-	in al, DRIVER_PS2_PORT_DATA
-
-.end:
-	; accept this interrupt
-	call kernel_lapic_accept
-
-	pop r8
-	pop rcx
-	pop rax
-
-	iretq
-
-driver_ps2_read_check:
-	push rax
+	; preserve original registers
+	push	rax
 
 .loop:
 	; check controller status
-	in al, DRIVER_PS2_PORT_COMMAND_OR_STATUS
-	test al, DRIVER_PS2_STATUS_output
-	jz .loop
+	in	al,	DRIVER_PS2_PORT_COMMAND_OR_STATUS
+	test	al,	DRIVER_PS2_STATUS_output
+	jz	.end	; there is nothig, good
 
-	pop rax
+	; release data from controller data port
+	in	al,	DRIVER_PS2_PORT_DATA
 
+	; try again
+	jmp	.loop
+
+.end:
+	; restore original registers
+	pop	rax
+
+	; return from routine
+	ret
+
+; align routine
+align	0x08,	db	EMPTY
+driver_ps2_keyboard:
+	; preserve original registers
+	push	rax
+	push	rcx
+	push	r8
+
+	; kernel environment variables/rountines base address
+	mov	r8,	qword [kernel_environment_base_address]
+
+	; receive key scancode
+	xor	ax,	ax	; 16 bit value
+	in	al,	DRIVER_PS2_PORT_DATA
+
+.end:
+	; accept this interrupt
+	call	kernel_lapic_accept
+
+	; restore original registers
+	pop	r8
+	pop	rcx
+	pop	rax
+
+	; return from interrupt
+	iretq
+
+driver_ps2_read_check:
+	; preserve original registers
+	push	rax
+
+.loop:
+	; check controller status
+	in	al,	DRIVER_PS2_PORT_COMMAND_OR_STATUS
+	test	al,	DRIVER_PS2_STATUS_output
+	jz	.loop	; there is no data
+
+	; restore original registers
+	pop	rax
+
+	; return from routine
 	ret
 
 driver_ps2_receive_data:
 	; wait for read opportunity
-	call driver_ps2_read_check
+	call	driver_ps2_read_check
 
 	; receive answer
-	in al, DRIVER_PS2_PORT_DATA
+	in	al,	DRIVER_PS2_PORT_DATA
+
+	; return from routine
 	ret
 
 driver_ps2_send_command:
 	; wait for command send opportunity
-	call driver_ps2_write_check
+	call	driver_ps2_write_check
 
 	; send command
-	out DRIVER_PS2_PORT_COMMAND_OR_STATUS, al
+	out	DRIVER_PS2_PORT_COMMAND_OR_STATUS,	al
+
+	; return from routine
 	ret
 
 driver_ps2_send_command_receive_answer:
-	; awit for send command opportunity
-	call driver_ps2_write_check
+	; wait for send command opportunity
+	call	driver_ps2_write_check
 
 	; send command
-	out DRIVER_PS2_PORT_COMMAND_OR_STATUS, al
-	
+	out	DRIVER_PS2_PORT_COMMAND_OR_STATUS,	al
+
 	; receive answer from controller
-	call driver_ps2_receive_data
-	
+	call	driver_ps2_receive_data
+
+	; return from routine
 	ret
 
 driver_ps2_send_data:
 	; wait for data send opportunity
-	call driver_ps2_write_check
-	
-	; send data to controller
-	out DRIVER_PS2_PORT_DATA, al
+	call	driver_ps2_write_check
 
+	; send data to controller
+	out	DRIVER_PS2_PORT_DATA,	al
+
+	; return from routine
 	ret
 
 driver_ps2_write_check:
-	push rax
+	; preserve original registers
+	push	rax
 
 .loop:
 	; check controller status
-	in al, DRIVER_PS2_PORT_COMMAND_OR_STATUS
-	test al, DRIVER_PS2_STATUS_input
-	jnz .loop
+	in	al,	DRIVER_PS2_PORT_COMMAND_OR_STATUS
+	test	al,	DRIVER_PS2_STATUS_input
+	jnz	.loop	; controller not ready
 
-	; restore original register
-	pop rax
-	
+	; restore original registers
+	pop	rax
+
+	; return from routine
 	ret

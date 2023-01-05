@@ -1,115 +1,170 @@
 driver_serial:
-    push rax
-    push rdx
+	; preserve original register
+	push	rax
+	push	rdx
 
-    mov al, 0x00
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.interrupt_enable_or_divisor_high
-    out dx, al
+	; disable interrupt generation
+	mov	al,	0x00
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.interrupt_enable_or_divisor_high
+	out	dx,	al
 
-    mov al, 0x80
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.line_control_or_dlab
-    out dx, al
-    
-    mov al, 0x03
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.data_or_divisor_low
-    out dx, al
-    mov al, 0x00
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.interrupt_enable_or_divisor_high
-    out dx, al
+	; enable DLAB (frequency divider)
+	mov	al,	0x80
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.line_control_or_dlab
+	out	dx,	al
 
-    ; set 8 bit sign for no parity, 1 stop bit
-    mov al, 0x03
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.line_control_or_dlab
-    out dx, al
-    
-    mov al, 0xC7
-    mov dl, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.interrupt_identification_or_fifo
-    out dx, al
+	; communication frequency: 38400
+	mov	al,	0x03
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.data_or_divisor_low
+	out	dx,	al
+	mov	al,	0x00
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.interrupt_enable_or_divisor_high
+	out	dx,	al
 
-    mov al, 0x0B
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.modem_control
-    out dx, al
+	; 8 bits per sign, no parity, 1 stop bit
+	mov	al,	0x03
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.line_control_or_dlab
+	out	dx,	al
 
-    ; restore original register
-    pop rdx
-    pop rax
+	; enable FIFO, clear with 14 byte threshold
+	mov	al,	0xC7
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.interrupt_identification_or_fifo
+	out	dx,	al
 
-    ret
+	; set RTS/DSR, AUX1, AUX2
+	mov	al,	0x0B
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.modem_control
+	out	dx,	al
+
+	; restore original registers
+	pop	rdx
+	pop	rax
+
+	; return from routine
+	ret
 
 driver_serial_char:
-    push rdx
-    call driver_serial_ready
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.data_or_divisor_low
-    out dx, al
-    pop rdx
-    ret
+	; preserve original register
+	push	rdx
+
+	; wait for controller to be ready
+	call	driver_serial_ready
+
+	; output port number
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.data_or_divisor_low
+
+	; send character
+	out	dx,	al
+
+	; restore original register
+	pop	rdx
+
+	; return from routine
+	ret
 
 driver_serial_ready:
-    push rax
-    push rdx
-    mov dx, DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.line_status
+	; preserve original registers
+	push	rax
+	push	rdx
+
+	; line status port
+	mov	dx,	DRIVER_SERIAL_PORT_COM1 + DRIVER_SERIAL_STRUCTURE_register.line_status
 
 .loop:
-    in al, dx
-    test al, 01100000b
-    jz .loop
+	; retrieve controller status
+	in	al,	dx
 
-    pop rdx
-    pop rax
-    ret
+	; cache empty?
+	test	al,	01100000b
+	jz	.loop	; no, wait longer
+
+	; regoster original registers
+	pop	rdx
+	pop	rax
+
+	; return from routine
+	ret
 
 driver_serial_string:
-    push rax
-    push rsi
+	; preserve original register
+	push	rax
+	push	rsi
 
 .loop:
-    lodsb
-    test al, al
-    jz .end
+	; load character from string
+	lodsb
 
-    call driver_serial_char
-    jmp .loop
+	; end of string?
+	test	al,	al
+	jz	.end	; yes
+
+	; send character to output
+	call	driver_serial_char
+
+	; show other characters from string
+	jmp	.loop
 
 .end:
-    pop rsi
-    pop rax
+	; restore original registers
+	pop	rsi
+	pop	rax
 
-    ret
+	; return from routine
+	ret
 
-driver_serial_valu:
-    push rax
-    push rdx
-    push rbp
+driver_serial_value:
+	; preserve original registers
+	push	rax
+	push	rdx
+	push	rbp
 
-    mov rbp, rsp
+	; stack of separated digits
+	mov	rbp,	rsp
 
 .loop:
-    xor edx, edx
-    div rbx
+	; division result
+	xor	edx,	edx
 
-    add dl, STATIC_ASCII_DIGIT_0
-    push rdx
+	; modulo
+	div	rbx
 
-    test rax, rax
-    jnz .loop
+	; convert digit to ASCII
+	add	dl,	STATIC_ASCII_DIGIT_0
+	push	rdx	; and keep on stack
+
+	; keep parsing?
+	test	rax,	rax
+	jnz	.loop	; yes
 
 .return:
-    cmp rsp, rbp
-    je .end
+	; show all digits
 
-    pop rax
-    cmp  al, STATIC_ASCII_DIGIT_0
-    jb .no
+	; something left?
+	cmp	rsp,	rbp
+	je	.end	; no
 
-    add al, 0x07
+	; get a digit
+	pop	rax
+
+	; is base of digit is greater than 10
+	cmp	al,	STATIC_ASCII_DIGIT_0 + 10
+	jb	.no	; no
+
+	; correct ASCII code to base number
+	add	al,	0x07
 
 .no:
-    call driver_serial_char
-    jmp .return
+	; show digit
+	call	driver_serial_char
+
+	; next digit
+	jmp	.return
 
 .end:
-    pop rbp
-    pop rdx
-    pop rax
+	; restore original registers
+	pop	rbp
+	pop	rdx
+	pop	rax
 
-    ret
+	; return from routine
+	ret
