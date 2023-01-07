@@ -1,19 +1,23 @@
-kernel_environment_base_address dq EMPTY
+kernel_environment_base_address	dq	EMPTY
 
-kernel_page_mirror dq KERNEL_PAGE_mirror
+; often necessary
+kernel_page_mirror		dq	KERNEL_PAGE_mirror
 
-align 0x08, db 0x00
-kernel_gdt_header dw STATIC_PAGE_SIZE_byte
-					dq EMPTY
+; align table
+align	0x08,	db	0x00
+kernel_gdt_header		dw	STATIC_PAGE_SIZE_byte
+				dq	EMPTY
 
-align 0x08, db 0x00
-kernel_idt_header dw STATIC_PAGE_SIZE_byte
-					dq EMPTY
+; align table
+align	0x08,	db	0x00
+kernel_idt_header		dw	STATIC_PAGE_SIZE_byte
+				dq	EMPTY
 
-align 0x08, db 0x00
-kernel_tss_header dd EMPTY
-					dq KERNEL_TASK_STACK_pointer
-		times 92	db EMPTY
+; align table
+align	0x08,	db	0x00
+kernel_tss_header		dd	EMPTY
+				dq	KERNEL_TASK_STACK_pointer	; rsp0
+		times 92	db	EMPTY
 kernel_tss_header_end:
 
 kernel_idt_exception_string_unknown			db	STATIC_ASCII_NEW_LINE, "{UNKNOWN CPU EXCEPTION}", STATIC_ASCII_TERMINATOR
@@ -41,7 +45,8 @@ kernel_idt_exception_string_hypervisor_injection	db	STATIC_ASCII_NEW_LINE, "Hype
 kernel_idt_exception_string_vmm_communication		db	STATIC_ASCII_NEW_LINE, "VMM Communication", " at 0x", STATIC_ASCII_TERMINATOR
 kernel_idt_exception_string_security			db	STATIC_ASCII_NEW_LINE, "Security", " at 0x", STATIC_ASCII_TERMINATOR
 
-align 0x08, db 0x00
+; align table
+align	0x08,	db	0x00
 kernel_idt_exception_string:
 	dq	kernel_idt_exception_string_divide_by_zero_error
 	dq	kernel_idt_exception_string_debug
