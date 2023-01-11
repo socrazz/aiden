@@ -275,8 +275,6 @@ kernel_idt_exception_security:
 	; exception id
 	push	30
 
-;-------------------------------------------------------------------------------
-; void
 kernel_idt_exception:
 	; keep original registers
 	push	rax
